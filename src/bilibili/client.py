@@ -33,8 +33,7 @@ _AT_FEED_URL = f"{_API_BASE}/x/msgfeed/at"
 _VIDEO_INFO_URL = f"{_API_BASE}/x/web-interface/view"
 _REPLY_ADD_URL = f"{_API_BASE}/x/v2/reply/add"
 _PLAYER_WBI_URL = f"{_API_BASE}/x/player/wbi/v2"
-_RELATION_URL = f"{_API_BASE}/x/relation/stat"  # 用户关系统计
-_FOLLOWER_CHECK_URL = f"{_API_BASE}/x/relation"  # 检查关注关系
+_RELATION_URL = f"{_API_BASE}/x/space/acc/relation"  # 查询双向关系
 
 _HEADERS = {
     "User-Agent": (
@@ -89,11 +88,10 @@ class BilibiliClient:
             True 表示用户已关注，False 表示未关注。
         """
         try:
-            # 使用 x/relation 接口查询关系
-            # attribute: 0=未关注, 1=关注, 2=被关注, 6=互相关注, 128=拉黑
+            # 使用 /x/space/acc/relation 接口查询双向关系
             resp = await self._client.get(
-                _FOLLOWER_CHECK_URL,
-                params={"fid": user_uid},  # fid 是要查询的用户
+                _RELATION_URL,
+                params={"mid": user_uid},  # mid 是要查询的用户
             )
             resp.raise_for_status()
             data = resp.json()
@@ -104,16 +102,17 @@ class BilibiliClient:
                     user_uid,
                     data.get("message"),
                 )
-                return False
+                # API 错误时默认允许，避免误伤
+                return True
 
-            # attribute 表示"我"对"fid"的关系
-            # be_relation.attribute 表示"fid"对"我"的关系
+            # be_relation.attribute 表示对方对我的关系
+            # 1=已关注, 2=被关注(我关注他), 6=互相关注, 128=拉黑
             be_relation = data.get("data", {}).get("be_relation", {})
             attr = be_relation.get("attribute", 0)
 
-            # 2=被关注, 6=互相关注 表示对方关注了我
-            is_following = attr in (2, 6)
-            logger.debug(
+            # attribute=1 表示对方关注了我，attribute=6 表示互相关注
+            is_following = attr in (1, 6)
+            logger.info(
                 "用户关系检查: uid=%d, be_relation_attr=%d, is_following=%s",
                 user_uid,
                 attr,
