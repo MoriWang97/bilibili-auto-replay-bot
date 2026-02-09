@@ -1,12 +1,47 @@
+# Config with secrets
 config/config.yaml
+
+# Python bytecode
 __pycache__/
-*.pyc
-*.pyo
-.env
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
 .venv/
 venv/
+ENV/
+env/
+.env
+
+# Build & Distribution
 *.egg-info/
 dist/
 build/
+eggs/
+*.egg
+.installed.cfg
+
+# Testing & Linting
 .ruff_cache/
 .pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/

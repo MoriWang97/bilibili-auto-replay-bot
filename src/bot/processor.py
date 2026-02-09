@@ -22,6 +22,14 @@ _AT_PATTERN = re.compile(r"@[\w\-]+\s*")
 # 识别总结意图的关键词
 _SUMMARY_KEYWORDS = {"总结", "概括", "摘要", "说了什么", "讲了什么", "内容是什么", "说了啥", "讲了啥"}
 
+# 未关注用户的提示消息
+_NOT_FOLLOWING_MSG = """👋 你好呀～
+
+看起来你还没有关注我哦！
+✨ 关注我之后就可以免费使用 AI 视频总结功能啦～
+
+点击我的头像 → 关注 → 再来 @我 试试吧！"""
+
 
 class MessageProcessor:
     """处理单条 @通知的完整流程.
@@ -68,6 +76,18 @@ class MessageProcessor:
         )
 
         try:
+            # 0. 检查用户是否关注了我
+            is_following = await self._bili.is_user_following_me(
+                notification.sender_uid
+            )
+            if not is_following:
+                logger.info(
+                    "用户未关注，发送提示: sender=%s uid=%d",
+                    notification.sender_name,
+                    notification.sender_uid,
+                )
+                return await self._send_reply(notification, _NOT_FOLLOWING_MSG)
+
             # 1. 获取视频信息
             video = await self._bili.fetch_video_info(bvid)
 

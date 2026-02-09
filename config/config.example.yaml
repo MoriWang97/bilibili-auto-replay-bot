@@ -1,22 +1,23 @@
 # Bilibili Bot - AI 自动回复机器人配置文件
 # 复制本文件为 config.yaml 并填入你的真实信息
 
-bilibili:
-  # 登录 bilibili.com 后从 Cookie 中获取
-  sessdata: "your_sessdata_here"
-  bili_jct: "your_bili_jct_here"
-  # 你自己的 B站 UID（个人空间 URL 中的数字）
-  uid: 0
-
 azure_openai:
   # Azure OpenAI 端点 (如 https://xxx.openai.azure.com/)
   endpoint: "https://your-resource.openai.azure.com/"
-  # Azure OpenAI API Key
-  api_key: "your_api_key_here"
   # 模型部署名称
   deployment: "gpt-52"
   # API 版本
-  api_version: "2025-01-01-preview"
+  api_version: "2025-04-01-preview"
+
+keyvault:
+  # Azure Key Vault URL
+  vault_url: "https://your-keyvault.vault.azure.net/"
+  # 存储 Azure OpenAI API Key 的 Secret 名称
+  api_key_secret_name: "AzureAI--ApiKey"
+  # 存储 B站 Cookie 的 Secret 名称
+  sessdata_secret_name: "Bili--Sessdata"
+  bili_jct_secret_name: "Bili--JCT"
+  uid_secret_name: "Bili--UID"
 
 bot:
   # 轮询 @提醒 的间隔（秒）。建议 30-60，太频繁会被风控
