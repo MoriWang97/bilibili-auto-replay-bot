@@ -106,12 +106,12 @@ class BilibiliClient:
                 return True
 
             # be_relation.attribute 表示对方对我的关系
-            # 1=已关注, 2=被关注(我关注他), 6=互相关注, 128=拉黑
+            # 0=无关系, 2=已关注我, 6=互相关注, 128=已拉黑我
             be_relation = data.get("data", {}).get("be_relation", {})
             attr = be_relation.get("attribute", 0)
 
-            # attribute=1 表示对方关注了我，attribute=6 表示互相关注
-            is_following = attr in (1, 6)
+            # attribute=2 表示对方关注了我，attribute=6 表示互相关注
+            is_following = attr in (2, 6)
             logger.info(
                 "用户关系检查: uid=%d, be_relation_attr=%d, is_following=%s",
                 user_uid,
