@@ -1,11 +1,16 @@
-"""配置管理 — 加载 YAML 配置文件.
+"""配置管理 — 加载 YAML 配置文件或环境变量.
 
 使用 pydantic-settings 进行配置校验，
 确保必填项不为空、类型正确。
+
+支持两种配置方式：
+1. YAML 文件（本地开发）
+2. 环境变量（Azure 部署）
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -76,12 +81,13 @@ class AppConfig(BaseModel):
 
 
 def load_config(config_path: str | Path | None = None) -> AppConfig:
-    """加载配置文件.
+    """加载配置文件或从环境变量构建配置.
 
-    按优先级查找配置文件：
-    1. 指定路径
-    2. config/config.yaml
-    3. config.yaml
+    优先级：
+    1. 环境变量 AZURE_OPENAI_ENDPOINT 存在 → 从环境变量加载
+    2. 指定路径的配置文件
+    3. config/config.yaml
+    4. config.yaml
 
     Args:
         config_path: 配置文件路径（可选）。
@@ -89,6 +95,11 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     Returns:
         AppConfig 对象。
     """
+    # 优先从环境变量加载（Azure 部署场景）
+    if os.getenv("AZURE_OPENAI_ENDPOINT"):
+        return _load_from_env()
+
+    # 本地开发：从 YAML 文件加载
     search_paths = [
         Path("config/config.yaml"),
         Path("config.yaml"),
@@ -118,3 +129,41 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     except Exception as e:
         print(f"❌ 配置文件校验失败: {e}")
         sys.exit(1)
+
+
+def _load_from_env() -> AppConfig:
+    """从环境变量加载配置（Azure 部署用）.
+
+    环境变量映射：
+    - AZURE_OPENAI_ENDPOINT
+    - AZURE_OPENAI_DEPLOYMENT
+    - AZURE_OPENAI_API_VERSION
+    - KEYVAULT_URL
+    - BOT_POLL_INTERVAL
+    - BOT_MAX_SUBTITLE_CHARS
+    - LOG_LEVEL
+    """
+    return AppConfig(
+        azure_openai=AzureOpenAIConfig(
+            endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+            deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-52"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview"),
+        ),
+        keyvault=KeyVaultConfig(
+            vault_url=os.environ["KEYVAULT_URL"],
+            api_key_secret_name=os.getenv("KEYVAULT_API_KEY_NAME", "AzureAI--ApiKey"),
+            sessdata_secret_name=os.getenv("KEYVAULT_SESSDATA_NAME", "Bili--Sessdata"),
+            bili_jct_secret_name=os.getenv("KEYVAULT_BILI_JCT_NAME", "Bili--JCT"),
+            uid_secret_name=os.getenv("KEYVAULT_UID_NAME", "Bili--UID"),
+        ),
+        bot=BotConfig(
+            poll_interval=int(os.getenv("BOT_POLL_INTERVAL", "60")),
+            max_subtitle_chars=int(os.getenv("BOT_MAX_SUBTITLE_CHARS", "8000")),
+            cache_ttl=int(os.getenv("BOT_CACHE_TTL", "86400")),
+            reply_prefix=os.getenv("BOT_REPLY_PREFIX", "【AI总结】"),
+            max_reply_chars=int(os.getenv("BOT_MAX_REPLY_CHARS", "900")),
+        ),
+        logging=LoggingConfig(
+            level=os.getenv("LOG_LEVEL", "INFO"),
+        ),
+    )
