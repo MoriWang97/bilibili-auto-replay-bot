@@ -13,37 +13,38 @@ import yaml
 from pydantic import BaseModel, field_validator
 
 
-class BilibiliConfig(BaseModel):
-    """B站相关配置."""
-
-    sessdata: str
-    bili_jct: str
-    uid: int
-
-    @field_validator("sessdata", "bili_jct")
-    @classmethod
-    def not_placeholder(cls, v: str) -> str:
-        if "your_" in v or not v.strip():
-            raise ValueError(
-                "请填入真实的 B站 Cookie 值，不要使用占位符"
-            )
-        return v.strip()
-
-
 class AzureOpenAIConfig(BaseModel):
     """Azure OpenAI 相关配置."""
 
     endpoint: str
-    api_key: str
     deployment: str = "gpt-52"
-    api_version: str = "2025-01-01-preview"
+    api_version: str = "2025-04-01-preview"
 
-    @field_validator("endpoint", "api_key")
+    @field_validator("endpoint")
     @classmethod
     def not_placeholder(cls, v: str) -> str:
         if "your_" in v or not v.strip():
             raise ValueError(
                 "请填入真实的 Azure OpenAI 配置值"
+            )
+        return v.strip()
+
+
+class KeyVaultConfig(BaseModel):
+    """Azure Key Vault 配置."""
+
+    vault_url: str
+    api_key_secret_name: str = "AzureAI--ApiKey"
+    sessdata_secret_name: str = "Bili--Sessdata"
+    bili_jct_secret_name: str = "Bili--JCT"
+    uid_secret_name: str = "Bili--UID"
+
+    @field_validator("vault_url")
+    @classmethod
+    def not_placeholder(cls, v: str) -> str:
+        if "your_" in v or not v.strip():
+            raise ValueError(
+                "请填入真实的 Key Vault URL"
             )
         return v.strip()
 
@@ -68,8 +69,8 @@ class LoggingConfig(BaseModel):
 class AppConfig(BaseModel):
     """应用总配置."""
 
-    bilibili: BilibiliConfig
     azure_openai: AzureOpenAIConfig
+    keyvault: KeyVaultConfig
     bot: BotConfig = BotConfig()
     logging: LoggingConfig = LoggingConfig()
 

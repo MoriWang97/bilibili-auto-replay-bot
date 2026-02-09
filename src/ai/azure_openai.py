@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from openai import AsyncAzureOpenAI
+from openai import APIConnectionError, APITimeoutError, AsyncAzureOpenAI
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -21,21 +21,32 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT_SUMMARY = """你是一个 B站视频内容总结助手。
 用户会给你一个视频的标题、简介和字幕内容，请你生成一个简洁明了的总结。
-要求：
-1. 总结控制在 300 字以内
-2. 用条理清晰的方式组织（可以用序号列表）
-3. 提炼出视频的核心观点和关键信息
-4. 语气友好、自然，像一个热心的 B站用户
-5. 不要提及"字幕"、"根据字幕"等词汇，直接总结内容"""
+
+【格式要求】- 这是B站评论区，不支持任何 Markdown 语法！
+- 禁止使用 **粗体**、*斜体*、# 标题、- 列表 等 Markdown 格式
+- 用数字序号（1. 2. 3.）或 emoji（📌🔹▸）来组织内容
+- 每个要点独占一行，保持简洁
+- 适合手机端阅读，避免大段文字
+
+【内容要求】
+- 总结控制在 250 字以内
+- 提炼 3-5 个核心要点
+- 语气友好自然，像热心的 B站用户
+- 不要提及"字幕"、"根据字幕"等词汇"""
 
 _SYSTEM_PROMPT_QA = """你是一个 B站视频内容问答助手。
 用户会给你一个视频的标题、简介和字幕内容，以及一个具体的问题。
-请你根据视频内容回答问题。
-要求：
-1. 回答控制在 300 字以内
-2. 如果视频内容中没有相关信息，诚实说明
-3. 语气友好、自然，像一个热心的 B站用户
-4. 不要提及"字幕"、"根据字幕"等词汇"""
+
+【格式要求】- 这是B站评论区，不支持任何 Markdown 语法！
+- 禁止使用 **粗体**、*斜体*、# 标题 等 Markdown 格式
+- 直接用纯文本回答，可用 emoji 点缀
+- 适合手机端阅读
+
+【内容要求】
+- 回答控制在 250 字以内
+- 如果视频内容中没有相关信息，诚实说明
+- 语气友好自然，像热心的 B站用户
+- 不要提及"字幕"、"根据字幕"等词汇"""
 
 
 class AzureOpenAIProvider(AIProvider):
@@ -61,7 +72,7 @@ class AzureOpenAIProvider(AIProvider):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(min=2, max=15),
-        retry=retry_if_exception_type(Exception),
+        retry=retry_if_exception_type((APIConnectionError, APITimeoutError)),
     )
     async def summarize_video(self, video_context: str) -> str:
         """调用 Azure OpenAI 生成视频总结."""
@@ -73,7 +84,7 @@ class AzureOpenAIProvider(AIProvider):
                 {"role": "system", "content": _SYSTEM_PROMPT_SUMMARY},
                 {"role": "user", "content": video_context},
             ],
-            max_tokens=800,
+            max_completion_tokens=800,
             temperature=0.7,
         )
 
@@ -88,7 +99,7 @@ class AzureOpenAIProvider(AIProvider):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(min=2, max=15),
-        retry=retry_if_exception_type(Exception),
+        retry=retry_if_exception_type((APIConnectionError, APITimeoutError)),
     )
     async def answer_question(
         self, video_context: str, question: str
@@ -104,7 +115,7 @@ class AzureOpenAIProvider(AIProvider):
                 {"role": "system", "content": _SYSTEM_PROMPT_QA},
                 {"role": "user", "content": user_message},
             ],
-            max_tokens=800,
+            max_completion_tokens=800,
             temperature=0.7,
         )
 

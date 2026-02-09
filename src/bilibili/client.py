@@ -33,6 +33,8 @@ _AT_FEED_URL = f"{_API_BASE}/x/msgfeed/at"
 _VIDEO_INFO_URL = f"{_API_BASE}/x/web-interface/view"
 _REPLY_ADD_URL = f"{_API_BASE}/x/v2/reply/add"
 _PLAYER_WBI_URL = f"{_API_BASE}/x/player/wbi/v2"
+_RELATION_URL = f"{_API_BASE}/x/relation/stat"  # 用户关系统计
+_FOLLOWER_CHECK_URL = f"{_API_BASE}/x/relation"  # 检查关注关系
 
 _HEADERS = {
     "User-Agent": (
@@ -75,6 +77,55 @@ class BilibiliClient:
     async def close(self) -> None:
         await self._client.aclose()
 
+    # ── 用户关系检查 ──────────────────────────────────────────
+
+    async def is_user_following_me(self, user_uid: int) -> bool:
+        """检查指定用户是否关注了当前账号.
+
+        Args:
+            user_uid: 要检查的用户 UID。
+
+        Returns:
+            True 表示用户已关注，False 表示未关注。
+        """
+        try:
+            # 使用 x/relation 接口查询关系
+            # attribute: 0=未关注, 1=关注, 2=被关注, 6=互相关注, 128=拉黑
+            resp = await self._client.get(
+                _FOLLOWER_CHECK_URL,
+                params={"fid": user_uid},  # fid 是要查询的用户
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("code") != 0:
+                logger.warning(
+                    "查询用户关系失败: uid=%d, msg=%s",
+                    user_uid,
+                    data.get("message"),
+                )
+                return False
+
+            # attribute 表示"我"对"fid"的关系
+            # be_relation.attribute 表示"fid"对"我"的关系
+            be_relation = data.get("data", {}).get("be_relation", {})
+            attr = be_relation.get("attribute", 0)
+
+            # 2=被关注, 6=互相关注 表示对方关注了我
+            is_following = attr in (2, 6)
+            logger.debug(
+                "用户关系检查: uid=%d, be_relation_attr=%d, is_following=%s",
+                user_uid,
+                attr,
+                is_following,
+            )
+            return is_following
+
+        except Exception:
+            logger.warning("检查用户关系异常: uid=%d", user_uid, exc_info=True)
+            # 出错时默认允许，避免误伤
+            return True
+
     # ── @提醒通知 ─────────────────────────────────────────────
 
     @retry(
@@ -83,19 +134,20 @@ class BilibiliClient:
         retry=retry_if_exception_type(httpx.TransportError),
     )
     async def fetch_at_notifications(
-        self, last_at_time: int = 0
+        self, last_at_time: int = 0  # noqa: ARG002
     ) -> list[AtNotification]:
         """拉取 @提醒列表.
 
         Args:
-            last_at_time: 上次拉取的最新时间戳，只返回更新的通知。
+            last_at_time: 已废弃，B站 API 的 at_time 是向后翻页用的，
+                         不是获取新通知。我们总是获取最新通知，在调用方过滤。
 
         Returns:
             按时间倒序排列的 @通知列表。
         """
+        # 注意：B站 at_time 参数是获取该时间之前的通知（翻页），不是之后的新通知
+        # 所以我们始终不传 at_time，获取最新的通知列表
         params: dict[str, Any] = {"build": 0, "mobi_app": "web"}
-        if last_at_time > 0:
-            params["at_time"] = last_at_time
 
         resp = await self._client.get(_AT_FEED_URL, params=params)
         resp.raise_for_status()

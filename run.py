@@ -24,6 +24,7 @@ from src.bilibili.client import BilibiliClient  # noqa: E402
 from src.bot.cache import SummaryCache  # noqa: E402
 from src.bot.monitor import AtMonitor  # noqa: E402
 from src.bot.processor import MessageProcessor  # noqa: E402
+from src.config.keyvault import KeyVaultSecretProvider  # noqa: E402
 from src.config.settings import load_config  # noqa: E402
 
 
@@ -58,17 +59,35 @@ async def main() -> None:
     logger.info("=" * 50)
 
     # 3. 依赖注入 — 组装组件
+    # Adapter: Key Vault 密钥提供者
+    keyvault_provider = KeyVaultSecretProvider(
+        vault_url=config.keyvault.vault_url,
+    )
+    api_key = keyvault_provider.get_secret(
+        config.keyvault.api_key_secret_name,
+    )
+    sessdata = keyvault_provider.get_secret(
+        config.keyvault.sessdata_secret_name,
+    )
+    bili_jct = keyvault_provider.get_secret(
+        config.keyvault.bili_jct_secret_name,
+    )
+    uid = int(keyvault_provider.get_secret(
+        config.keyvault.uid_secret_name,
+    ))
+    logger.info("已从 Key Vault 获取所有密钥 (API Key, SESSDATA, bili_jct, UID)")
+
     # Adapter: B站 API 客户端
     bili_client = BilibiliClient(
-        sessdata=config.bilibili.sessdata,
-        bili_jct=config.bilibili.bili_jct,
-        uid=config.bilibili.uid,
+        sessdata=sessdata,
+        bili_jct=bili_jct,
+        uid=uid,
     )
 
     # Strategy: AI 提供商
     ai_provider = AzureOpenAIProvider(
         endpoint=config.azure_openai.endpoint,
-        api_key=config.azure_openai.api_key,
+        api_key=api_key,
         deployment=config.azure_openai.deployment,
         api_version=config.azure_openai.api_version,
     )
@@ -102,6 +121,7 @@ async def main() -> None:
         await monitor.stop()
         await bili_client.close()
         await ai_provider.close()
+        keyvault_provider.close()
         logger.info("已关闭, 缓存统计: %s", cache.stats)
 
     # 注册信号处理
