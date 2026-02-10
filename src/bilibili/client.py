@@ -328,7 +328,47 @@ class BilibiliClient:
         lines = [item.get("content", "") for item in body_items]
         body_text = " ".join(lines)
 
-        return SubtitleContent(language=language, body=body_text)
+        # 生成带时间戳的字幕（每30秒一个段落）
+        timed_lines = []
+        current_time = -30
+        current_texts = []
+        
+        for item in body_items:
+            start_sec = int(item.get("from", 0))
+            content = item.get("content", "")
+            
+            # 每30秒创建一个新段落
+            if start_sec >= current_time + 30:
+                if current_texts:
+                    time_str = self._format_timestamp(current_time if current_time >= 0 else 0)
+                    timed_lines.append(f"[{time_str}] {' '.join(current_texts)}")
+                current_time = (start_sec // 30) * 30
+                current_texts = []
+            
+            current_texts.append(content)
+        
+        # 添加最后一段
+        if current_texts:
+            time_str = self._format_timestamp(current_time if current_time >= 0 else 0)
+            timed_lines.append(f"[{time_str}] {' '.join(current_texts)}")
+        
+        body_with_time = "\n".join(timed_lines)
+
+        return SubtitleContent(
+            language=language,
+            body=body_text,
+            body_with_time=body_with_time,
+        )
+
+    @staticmethod
+    def _format_timestamp(seconds: int) -> str:
+        """将秒数格式化为 B站 时间戳格式（如 01:23 或 1:23:45）."""
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        secs = seconds % 60
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{secs:02d}"
+        return f"{minutes:02d}:{secs:02d}"
 
     # ── 发送回复 ──────────────────────────────────────────────
 

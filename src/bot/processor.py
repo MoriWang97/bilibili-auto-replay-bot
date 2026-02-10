@@ -22,6 +22,14 @@ _AT_PATTERN = re.compile(r"@[\w\-]+\s*")
 # 识别总结意图的关键词
 _SUMMARY_KEYWORDS = {"总结", "概括", "摘要", "说了什么", "讲了什么", "内容是什么", "说了啥", "讲了啥"}
 
+# 字幕内容不足时的提示消息
+_NO_SUBTITLE_MSG = """😅 这个视频没有字幕内容（可能是纯画面/音乐/特效类视频），没办法生成总结哦~
+
+建议直接观看视频吧！"""
+
+# 字幕内容最低字符阈值（低于此值认为信息不足以总结）
+_MIN_SUBTITLE_CHARS = 100
+
 # 未关注用户的提示消息
 _NOT_FOLLOWING_MSG = """👋 你好呀～
 
@@ -105,11 +113,32 @@ class MessageProcessor:
 
             # 4. 获取字幕
             subtitle_text = None
+            subtitle_with_time = None
             subtitle = await self._bili.fetch_subtitle(bvid, video.cid)
             if subtitle:
                 subtitle_text = subtitle.body[: self._max_subtitle_chars]
+                # 带时间戳的字幕按行截断，避免破坏时间戳格式
+                if subtitle.body_with_time:
+                    lines = subtitle.body_with_time.split("\n")
+                    truncated_lines = []
+                    total_len = 0
+                    for line in lines:
+                        if total_len + len(line) + 1 > self._max_subtitle_chars:
+                            break
+                        truncated_lines.append(line)
+                        total_len += len(line) + 1
+                    subtitle_with_time = "\n".join(truncated_lines) if truncated_lines else None
 
-            # 5. 构建视频上下文
+            # 5. 检查字幕质量 — 无字幕或极少内容时直接回复，节省 AI 调用
+            if not subtitle_text or len(subtitle_text.strip()) < _MIN_SUBTITLE_CHARS:
+                logger.info(
+                    "字幕内容不足，跳过 AI 调用: bvid=%s subtitle_len=%d",
+                    bvid,
+                    len(subtitle_text) if subtitle_text else 0,
+                )
+                return await self._send_reply(notification, _NO_SUBTITLE_MSG)
+
+            # 6. 构建视频上下文
             duration_min = video.duration // 60
             duration_sec = video.duration % 60
             context = VideoContext(
@@ -119,10 +148,11 @@ class MessageProcessor:
                 owner_name=video.owner_name,
                 duration_text=f"{duration_min}分{duration_sec}秒",
                 subtitle=subtitle_text,
+                subtitle_with_time=subtitle_with_time,
                 user_question=user_text if not is_summary else "",
             )
 
-            # 6. 调用 AI
+            # 7. 调用 AI
             if is_summary:
                 ai_result = await self._ai.summarize_video(
                     context.to_prompt()
@@ -134,7 +164,7 @@ class MessageProcessor:
                     context.to_prompt(), user_text
                 )
 
-            # 7. 发送回复
+            # 8. 发送回复
             reply_text = self._format_reply(ai_result)
             return await self._send_reply(notification, reply_text)
 

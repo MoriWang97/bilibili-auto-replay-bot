@@ -39,6 +39,7 @@ class SubtitleContent:
 
     language: str
     body: str  # 合并后的纯文本字幕
+    body_with_time: str = ""  # 带时间戳的字幕（用于AI生成时间线）
 
 
 @dataclass(slots=True)
@@ -51,10 +52,15 @@ class VideoContext:
     owner_name: str
     duration_text: str
     subtitle: str | None = None  # 字幕文本，可能为空
+    subtitle_with_time: str | None = None  # 带时间戳的字幕
     user_question: str = ""  # 用户额外问题
 
-    def to_prompt(self) -> str:
-        """将视频上下文格式化为 AI prompt."""
+    def to_prompt(self, with_timeline: bool = True) -> str:
+        """将视频上下文格式化为 AI prompt.
+        
+        Args:
+            with_timeline: 是否使用带时间戳的字幕（用于生成时间线总结）
+        """
         parts = [
             f"视频标题：{self.title}",
             f"UP主：{self.owner_name}",
@@ -62,10 +68,14 @@ class VideoContext:
         ]
         if self.description:
             parts.append(f"视频简介：{self.description}")
-        if self.subtitle:
-            parts.append(f"视频字幕内容：\n{self.subtitle}")
+        
+        # 选择使用带时间戳的字幕还是纯文本字幕
+        subtitle_content = self.subtitle_with_time if with_timeline and self.subtitle_with_time else self.subtitle
+        
+        if subtitle_content:
+            parts.append(f"视频字幕内容：\n{subtitle_content}")
         else:
-            parts.append("（该视频没有字幕，请根据标题和简介进行总结）")
+            parts.append("（该视频没有字幕内容）")
 
         if self.user_question:
             parts.append(f"\n用户的问题/要求：{self.user_question}")
